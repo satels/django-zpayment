@@ -13,13 +13,15 @@ except ImportError:
     from md5 import md5
 
 
-WebmoneyPrerequestForm.LMI_PAYER_PURSE.regex = PURSE_RE
-WebmoneyPrerequestForm.LMI_PAYEE_PURSE.regex = WMID_RE
-WebmoneyPrerequestForm.LMI_PAYER_WM.regex = PURSE_RE
+WebmoneyPrerequestForm.base_fields['LMI_PAYER_PURSE'].regex = PURSE_RE
+WebmoneyPrerequestForm.base_fields['LMI_PAYEE_PURSE'].regex = WMID_RE
+WebmoneyPrerequestForm.base_fields['LMI_PAYEE_PURSE'].initial = ZPAYMENT_SHOP_ID
+WebmoneyPrerequestForm.base_fields['LMI_PAYER_WM'].regex = PURSE_RE
 
+WebmoneyPaymentRequestForm.base_fields['LMI_PAYEE_PURSE'].initial = ZPAYMENT_SHOP_ID
 
 def get_zp_sign(LMI_PAYMENT_NO, LMI_PAYMENT_AMOUNT):
-    key = "%s%s%0.2f" % (
+    key = "%s%s%0.2f%s" % (
         ZPAYMENT_SHOP_ID, LMI_PAYMENT_NO, LMI_PAYMENT_AMOUNT,
         ZPAYMENT_PASSWORD_INITIALIZATION
     )

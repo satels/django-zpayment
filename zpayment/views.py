@@ -7,6 +7,8 @@ from webmoney.models import Payment as WebmoneyPayment
 from webmoney.views import result as webmoney_result
 from zpayment.forms import PrerequestForm, PaymentNotificationForm
 from zpayment.models import PrePayment, Payment
+from webmoney.forms import SettledPaymentForm, UnSettledPaymentForm
+from annoying.decorators import render_to
 
 
 @csrf_exempt
@@ -40,4 +42,30 @@ def result(request):
             webmoney_payment=webmoney_payment,
             zp_type_pay=cleaned_data['ZP_TYPE_PAY']
         )
+    return response
+
+
+@render_to('zpayment/success.html')
+def success(request):
+    response = {}
+    if request.method == 'POST':
+        form = SettledPaymentForm(request.POST)
+        if form.is_valid():
+            response['id'] = form.cleaned_data['LMI_PAYMENT_NO']
+            response['sys_invs_no'] = form.cleaned_data['LMI_SYS_INVS_NO']
+            response['sys_trans_no'] = form.cleaned_data['LMI_SYS_TRANS_NO']
+            response['date'] = form.cleaned_data['LMI_SYS_TRANS_DATE']
+    return response
+
+
+@render_to('zpayment/fail.html')
+def fail(request):
+    response = {}
+    if request.method == 'POST':
+        form = UnSettledPaymentForm(request.POST)
+        if form.is_valid():
+            response['id'] = form.cleaned_data['LMI_PAYMENT_NO']
+            response['sys_invs_no'] = form.cleaned_data['LMI_SYS_INVS_NO']
+            response['sys_trans_no'] = form.cleaned_data['LMI_SYS_TRANS_NO']
+            response['date'] = form.cleaned_data['LMI_SYS_TRANS_DATE']
     return response
