@@ -1,12 +1,15 @@
 #coding:utf-8
 from django.db import models
+from django.db.utils import DatabaseError
 from webmoney.models import Purse
 from zpayment.conf import ZPAYMENT_SHOP_ID, ZPAYMENT_SECRET_KEY
 
-
-Purse.objects.get_or_create(
-    purse=ZPAYMENT_SHOP_ID, secret_key=ZPAYMENT_SECRET_KEY
-)
+try:
+    Purse.objects.get_or_create(
+        purse=ZPAYMENT_SHOP_ID, secret_key=ZPAYMENT_SECRET_KEY
+    )
+except DatabaseError:
+    pass
 
 
 class Invoice(models.Model):
