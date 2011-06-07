@@ -1,13 +1,19 @@
 #coding:utf-8
 from annoying.decorators import render_to
-from django.http import HttpResponseBadRequest
+from django.http import HttpResponseBadRequest, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
-from webmoney.models import Invoice
+from webmoney.models import Invoice, Purse
 from webmoney.models import Payment as WebmoneyPayment
 from zpayment.forms import PrerequestForm, PaymentNotificationForm
 from zpayment.models import PrePayment, Payment
 from webmoney.forms import SettledPaymentForm, UnSettledPaymentForm
+from webmoney.signals import webmoney_payment_accepted
+from django.core.mail import mail_admins
+try:
+    from hashlib import md5
+except ImportError:
+    from md5 import md5
 
 
 @csrf_exempt
@@ -42,7 +48,7 @@ def result(request):
             cleaned_data['LMI_PAYMENT_NO'],
             cleaned_data['LMI_MODE'],
             cleaned_data['LMI_SYS_INVS_NO'],
-            cleaned_data['LMI_SYS_TRANS_NO'], 
+            cleaned_data['LMI_SYS_TRANS_NO'],
             cleaned_data['LMI_SYS_TRANS_DATE'].strftime('%Y%m%d %H:%M:%S'),
             purse.secret_key,
             cleaned_data['LMI_PAYER_PURSE'],
@@ -50,6 +56,9 @@ def result(request):
         )
         generated_hash = md5(key).hexdigest().upper()
         payment_no = cleaned_data['LMI_PAYMENT_NO']
+        if Payment.objects.filter(payment_no=payment_no):
+            mail_admins('Dublicate payment', 'Payment NO is %s.' % payment_no, fail_silently=True)
+            return HttpResponse("OK")
         if generated_hash == form.cleaned_data['LMI_HASH']:
             payment = WebmoneyPayment(
                 payee_purse=purse,
@@ -70,7 +79,7 @@ def result(request):
             try:
                 invoice = Invoice.objects.get(payment_no=payment_no)
                 payment.invoice = invoice
-            except ObjectDoesNotExist:
+            except Invoice.DoesNotExist:
                 subject = 'Unprocessed payment without invoice!',
                 message = 'Payment NO is %s.' % payment_no
                 mail_admins(subject, message, fail_silently=True)
@@ -89,6 +98,7 @@ def result(request):
     return HttpResponseBadRequest("Unknown error!")
 
 
+@csrf_exempt
 @render_to('zpayment/success.html')
 def success(request):
     response = {}
@@ -102,6 +112,7 @@ def success(request):
     return response
 
 
+@csrf_exempt
 @render_to('zpayment/fail.html')
 def fail(request):
     response = {}
@@ -113,3 +124,4 @@ def fail(request):
             response['sys_trans_no'] = form.cleaned_data['LMI_SYS_TRANS_NO']
             response['date'] = form.cleaned_data['LMI_SYS_TRANS_DATE']
     return response
+
