@@ -1,21 +1,20 @@
 #coding:utf-8
+from annoying.decorators import render_to
 from django.http import HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from webmoney.models import Invoice
 from webmoney.models import Payment as WebmoneyPayment
-from webmoney.views import result as webmoney_result
 from zpayment.forms import PrerequestForm, PaymentNotificationForm
 from zpayment.models import PrePayment, Payment
 from webmoney.forms import SettledPaymentForm, UnSettledPaymentForm
-from annoying.decorators import render_to
 
 
 @csrf_exempt
 @require_POST
 def result(request):
     form = PrerequestForm(request.POST)
-    if form.is_valid():
+    if form.is_valid() and form.cleaned_data['LMI_PREREQUEST']:
         cleaned_data = form.cleaned_data
         pre_payment = PrePayment(
             id_pay=cleaned_data['ID_PAY'],
@@ -32,17 +31,62 @@ def result(request):
         else:
             pre_payment.invoice = invoice
             pre_payment.save()
-    response = webmoney_result(request)
+        return HttpResponse("YES")
     form = PaymentNotificationForm(request.POST)
     if form.is_valid():
         cleaned_data = form.cleaned_data
+        purse = Purse.objects.get(purse=cleaned_data['LMI_PAYEE_PURSE'])
+        key = "%s%s%s%s%s%s%s%s%s%s" % (
+            purse.purse,
+            cleaned_data['LMI_PAYMENT_AMOUNT'],
+            cleaned_data['LMI_PAYMENT_NO'],
+            cleaned_data['LMI_MODE'],
+            cleaned_data['LMI_SYS_INVS_NO'],
+            cleaned_data['LMI_SYS_TRANS_NO'], 
+            cleaned_data['LMI_SYS_TRANS_DATE'].strftime('%Y%m%d %H:%M:%S'),
+            purse.secret_key,
+            cleaned_data['LMI_PAYER_PURSE'],
+            cleaned_data['LMI_PAYER_WM']
+        )
+        generated_hash = md5(key).hexdigest().upper()
         payment_no = cleaned_data['LMI_PAYMENT_NO']
-        webmoney_payment = WebmoneyPayment.objects.get(payment_no=payment_no)
+        if generated_hash == form.cleaned_data['LMI_HASH']:
+            payment = WebmoneyPayment(
+                payee_purse=purse,
+                amount=cleaned_data['LMI_PAYMENT_AMOUNT'],
+                payment_no=payment_no,
+                mode=cleaned_data['LMI_MODE'],
+                sys_invs_no=cleaned_data['LMI_SYS_INVS_NO'],
+                sys_trans_no=cleaned_data['LMI_SYS_TRANS_NO'],
+                sys_trans_date=cleaned_data['LMI_SYS_TRANS_DATE'],
+                payer_purse=cleaned_data['LMI_PAYER_PURSE'],
+                payer_wm=cleaned_data['LMI_PAYER_WM'],
+                paymer_number=cleaned_data['LMI_PAYMER_NUMBER'],
+                paymer_email=cleaned_data['LMI_PAYMER_EMAIL'],
+                telepat_phonenumber=cleaned_data['LMI_TELEPAT_PHONENUMBER'],
+                telepat_orderid=cleaned_data['LMI_TELEPAT_ORDERID'],
+                payment_creditdays=cleaned_data['LMI_PAYMENT_CREDITDAYS']
+            )
+            try:
+                invoice = Invoice.objects.get(payment_no=payment_no)
+                payment.invoice = invoice
+            except ObjectDoesNotExist:
+                subject = 'Unprocessed payment without invoice!',
+                message = 'Payment NO is %s.' % payment_no
+                mail_admins(subject, message, fail_silently=True)
+            payment.save()
+            webmoney_payment_accepted.send(sender=payment.__class__, payment=payment)
+            return HttpResponse("OK")
+        else:
+            subject = 'Unprocessed payment with incorrect hash!'
+            message = 'Payment NO is %s.' % payment_no
+            mail_admins(subject, message, fail_silently=True)
+            return HttpResponseBadRequest("Incorrect hash")
         Payment.objects.create(
-            webmoney_payment=webmoney_payment,
+            webmoney_payment=payment,
             zp_type_pay=cleaned_data['ZP_TYPE_PAY']
         )
-    return response
+    return HttpResponseBadRequest("Unknown error!")
 
 
 @render_to('zpayment/success.html')

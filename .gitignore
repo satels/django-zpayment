@@ -3,3 +3,4 @@
 .pydevproject
 .settings/
 django_zpayment.egg-info/
+*.komodoproject
