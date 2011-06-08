@@ -56,7 +56,7 @@ def result(request):
         )
         generated_hash = md5(key).hexdigest().upper()
         payment_no = cleaned_data['LMI_PAYMENT_NO']
-        if Payment.objects.filter(payment_no=payment_no):
+        if WebmoneyPayment.objects.filter(payment_no=payment_no):
             mail_admins('Dublicate payment', 'Payment NO is %s.' % payment_no, fail_silently=True)
             return HttpResponse("OK")
         if generated_hash == form.cleaned_data['LMI_HASH']:
