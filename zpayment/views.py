@@ -1,15 +1,15 @@
 #coding:utf-8
 from annoying.decorators import render_to
+from django.core.mail import mail_admins
 from django.http import HttpResponseBadRequest, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+from webmoney.forms import SettledPaymentForm, UnSettledPaymentForm
 from webmoney.models import Invoice, Purse
 from webmoney.models import Payment as WebmoneyPayment
+from webmoney.signals import webmoney_payment_accepted
 from zpayment.forms import PrerequestForm, PaymentNotificationForm
 from zpayment.models import PrePayment, Payment
-from webmoney.forms import SettledPaymentForm, UnSettledPaymentForm
-from webmoney.signals import webmoney_payment_accepted
-from django.core.mail import mail_admins
 try:
     from hashlib import md5
 except ImportError:
@@ -35,7 +35,7 @@ def result(request):
                 "Invoice with number %s not found." % payment_no
             )
         else:
-            pre_payment.invoice = invoice
+            pre_payment.webmoney_invoice = invoice
             pre_payment.save()
         return HttpResponse("YES")
     form = PaymentNotificationForm(request.POST)
@@ -56,7 +56,7 @@ def result(request):
         )
         generated_hash = md5(key).hexdigest().upper()
         payment_no = cleaned_data['LMI_PAYMENT_NO']
-        if Payment.objects.filter(payment_no=payment_no):
+        if Payment.objects.filter(webmoney_payment__payment_no=payment_no):
             mail_admins('Dublicate payment', 'Payment NO is %s.' % payment_no, fail_silently=True)
             return HttpResponse("OK")
         if generated_hash == form.cleaned_data['LMI_HASH']:
@@ -84,17 +84,19 @@ def result(request):
                 message = 'Payment NO is %s.' % payment_no
                 mail_admins(subject, message, fail_silently=True)
             payment.save()
-            webmoney_payment_accepted.send(sender=payment.__class__, payment=payment)
+            Payment.objects.create(
+                webmoney_payment=payment,
+                zp_type_pay=cleaned_data['ZP_TYPE_PAY']
+            )
+            webmoney_payment_accepted.send(
+                sender=payment.__class__, payment=payment
+            )
             return HttpResponse("OK")
         else:
             subject = 'Unprocessed payment with incorrect hash!'
             message = 'Payment NO is %s.' % payment_no
             mail_admins(subject, message, fail_silently=True)
             return HttpResponseBadRequest("Incorrect hash")
-        Payment.objects.create(
-            webmoney_payment=payment,
-            zp_type_pay=cleaned_data['ZP_TYPE_PAY']
-        )
     return HttpResponseBadRequest("Unknown error!")
 
 
@@ -124,4 +126,3 @@ def fail(request):
             response['sys_trans_no'] = form.cleaned_data['LMI_SYS_TRANS_NO']
             response['date'] = form.cleaned_data['LMI_SYS_TRANS_DATE']
     return response
-

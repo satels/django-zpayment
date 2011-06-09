@@ -4,8 +4,8 @@ from django import forms
 from django.utils.translation import ugettext_lazy as _
 from webmoney.forms import PaymentRequestForm as WebmoneyPaymentRequestForm, \
     PrerequestForm as WebmoneyPrerequestForm, \
-    PaymentNotificationForm as WebmoneyPaymentNotificationForm, PayedPaymentForm
-from zpayment import PURSE_RE, WMID_RE
+    PaymentNotificationForm as WebmoneyPaymentNotificationForm
+from zpayment import WMID_RE
 from zpayment.conf import ZPAYMENT_SHOP_ID, ZPAYMENT_PASSWORD_INITIALIZATION
 try:
     from hashlib import md5
@@ -67,9 +67,9 @@ class PaymentNotificationForm(WebmoneyPaymentNotificationForm):
     LMI_MODE = forms.IntegerField(
         label=_('Test mode'), min_value=0, max_value=0, initial=0
     )
+    ZP_TYPE_PAY = forms.CharField(label=_('Z-Payment Pay Type'))
 
     def __init__(self, *args, **kwargs):
         super(PaymentNotificationForm, self).__init__(*args, **kwargs)
         self.fields['LMI_PAYEE_PURSE'].regex = WMID_RE
         self.fields['LMI_PAYEE_PURSE'].initial = ZPAYMENT_SHOP_ID
-
